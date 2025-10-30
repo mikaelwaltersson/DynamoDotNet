@@ -8,6 +8,7 @@ namespace DynamoDB.Net.Serialization;
 /// <param name="message">The message that describes the error.</param>
 public class DynamoDBSerializationException(string message) : Exception(message)
 {
+    /// <inheritdoc />
     public override string Message => 
         this.Path.Length > 0
             ? string.Concat(base.Message, " (", this.Path, ")") 

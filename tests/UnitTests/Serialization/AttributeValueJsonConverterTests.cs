@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using Amazon.DynamoDBv2.Model;
+using DynamoDB.Net.Serialization;
 
 namespace DynamoDB.Net.Tests.UnitTests.Serialization;
 

@@ -4,25 +4,36 @@ using Amazon.DynamoDBv2.Model;
 
 namespace DynamoDB.Net.Serialization.Converters;
 
+/// <summary>
+/// Converter that handles serialization and deserialization of enum types.
+/// Supports conversion from numeric and string representations and can format enum values appropriately.
+/// </summary>
 public class EnumTypeConverter
     : DynamoDBTypeConverter, IConvertFromNumber, IConvertFromString, IConvertToDynamoDBValue
 {
     EnumParser parser = new();
 
-    public NameTransform EnumNameTransform 
-    { 
+    /// <summary>
+    /// Name transform for enum values.
+    /// </summary>
+    public NameTransform EnumNameTransform
+    {
         get => parser.NameTransform;
-        set => parser = new EnumParserWithNameTransform(value); 
+        set => parser = new EnumParserWithNameTransform(value);
     }
 
+    /// <inheritdoc />
     public override bool Handle(Type type) => type.UnwrapNullableType().IsEnum;
 
+    /// <inheritdoc />
     public object ConvertFromNumber(string value, Type toType) =>
         Enum.ToObject(toType, long.Parse(value, CultureInfo.InvariantCulture));
 
+    /// <inheritdoc />
     public object ConvertFromString(string value, Type toType) =>
         parser.Parse(value, toType.UnwrapNullableType());
 
+    /// <inheritdoc />
     public AttributeValue ConvertToDynamoDBValue(object? value, Type fromType, IDynamoDBSerializer serializer)
     {
         if (value == null)
@@ -39,10 +50,10 @@ public class EnumTypeConverter
     {
         public virtual NameTransform NameTransform => NameTransform.Default;
 
-        public virtual object Parse(string value, Type toType) => 
+        public virtual object Parse(string value, Type toType) =>
             Enum.Parse(toType.UnwrapNullableType(), value);
 
-        public virtual string Format(object value, Type fromType) => 
+        public virtual string Format(object value, Type fromType) =>
             Enum.Format(fromType, value, "g");
     }
 
@@ -69,7 +80,7 @@ public class EnumTypeConverter
 
             if (value.Contains(','))
                 return string.Join(", ", value.Split(',').Select(flag => flag.Trim()).Select(flag => ApplyTransform(flag, transform)));
-            
+
             return value;
         }
     }

@@ -9,8 +9,16 @@ using DynamoDB.Net.Serialization.Converters;
 
 namespace DynamoDB.Net.Expressions;
 
+/// <summary>
+/// Contains helpers that translate LINQ-style expression trees into DynamoDB
+/// condition and update expression strings and related utilities.
+/// </summary>
 public static class ExpressionTranslator
 {
+    /// <summary>
+    /// Resolves the DynamoDB index name for a set of index property names.
+    /// </summary>
+    /// <param name="indexProperties">The property names tuple to resolve the index name from.</param>
     public static string? GetIndexName<T>(this (string?, string?) indexProperties) where T : class
     {
         var (partitionKeyName, sortKeyName) = indexProperties;
@@ -32,6 +40,10 @@ public static class ExpressionTranslator
         return TableDescription.Get(typeof(T)).GetIndexName(partitionKey, sortKey);
     }
 
+    /// <summary>
+    /// Resolves the DynamoDB index name from an expression.
+    /// </summary>
+    /// <param name="expression">The expression to resolve the index name from.</param>
     public static string? GetIndexName<T>(this Expression<Func<T, bool>> expression) where T : class
     {
         var reducedExpression = expression.TryReduceExpression();
@@ -44,12 +56,22 @@ public static class ExpressionTranslator
             : null;
     }
 
+    /// <summary>
+    /// Translates an update expression lambda into a DynamoDB update expression string.
+    /// </summary>
     public static string Translate<T>(this Expression<Func<T, bool>> expression, ExpressionTranslationContext context) where T : class =>
         expression.Body.ResolveExplicitConstants().Translate(context, isPredicate: true);
 
+    /// <summary>
+    /// Translates an update expression lambda into a DynamoDB update expression string.
+    /// </summary>
     public static string Translate<T>(this Expression<Func<T, DynamoDBExpressions.UpdateAction>> expression, ExpressionTranslationContext context) where T : class =>
         expression.Body.ReplaceSetToEmptyWithRemove(context).ResolveExplicitConstants().Translate(context);
 
+    /// <summary>
+    /// Replaces a constant with a parameter of type <typeparamref name="T"/> and returns
+    /// an expression that takes the parameter as input.
+    /// </summary>
     public static Expression<Func<T, TResult>> ReplaceConstantWithParameter<T, TResult>(this Expression<Func<TResult>> expression, T value, [CallerArgumentExpression(nameof(value))] string? parameterName = null) where T : class
     {
         var parameter = Expression.Parameter(typeof(T), parameterName);
@@ -61,6 +83,12 @@ public static class ExpressionTranslator
             expression.Parameters.Append(parameter));
     }
 
+    /// <summary>
+    /// Append an update action to an existing expression using the specified arguments.
+    /// </summary>
+    /// <param name="expression">The expression to append the update action to.</param>
+    /// <param name="action">The update action to append.</param>
+    /// <param name="arguments">The arguments to the update action.</param>
     public static string AppendUpdate(string? expression, string action, string arguments)
     {
         ArgumentNullException.ThrowIfNull(action);
@@ -84,6 +112,12 @@ public static class ExpressionTranslator
         return $"{expression[..i]}, {arguments}{expression[i..]}";
     }
 
+    /// <summary>
+    /// Append a condition to an existing expression using the specified binary operator.
+    /// </summary>
+    /// <param name="expression">The expression to append the update action to.</param>
+    /// <param name="condition">The condition to append.</param>
+    /// <param name="binaryOperator">The binary operator used to combine the expression and the condition.</param>
     public static string AppendCondition(string? expression, string condition, string binaryOperator)
     {
         ArgumentNullException.ThrowIfNull(condition);
@@ -204,7 +238,7 @@ public static class ExpressionTranslator
         {
             if (method.Name.Equals("get_Item", StringComparison.Ordinal))
                 return expression.Object.TranslateIndex(arguments, context);
-        
+
             arguments = [expression.Object, .. arguments];
         }
 
@@ -586,8 +620,8 @@ public static class ExpressionTranslator
 
         bool IsSerializedAttributeValue(object? value, MemberInfo property) =>
             DefaultDynamoDBTypeConverter.IsSerializedAttributeValue(
-                context.Serializer.GetPropertyAttributeInfo(property), 
-                property.GetPropertyType(), 
+                context.Serializer.GetPropertyAttributeInfo(property),
+                property.GetPropertyType(),
                 value) &&
             !context.Serializer.SerializeDynamoDBValue(value, property.GetPropertyType()).IsEmpty();
     }

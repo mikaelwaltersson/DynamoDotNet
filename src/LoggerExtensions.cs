@@ -4,7 +4,7 @@ using System.Text.Json.Serialization;
 using Amazon.DynamoDBv2;
 using Amazon.DynamoDBv2.Model;
 using Amazon.Runtime;
-
+using DynamoDB.Net.Serialization;
 using Microsoft.Extensions.Logging;
 
 namespace DynamoDB.Net;

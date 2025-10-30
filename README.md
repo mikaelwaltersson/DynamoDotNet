@@ -1,4 +1,4 @@
-# DynamoDB.Net
+# DynamoDotnetNet
 
 Easy to use and performant DynamoDB libary for .NET Core  
 
@@ -7,12 +7,11 @@ Easy to use and performant DynamoDB libary for .NET Core
 
 I created the library back in 2016 as an alternative to the "high level" [AWS SDK DynamoDB library](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/DotNetSDKHighLevel.html) that in my opionion was lacking in developer experience, no high level support for query/scan filters, reflection based (slow) serialization etc.  
 
-Because of lack of time to invest in creating documentation and adding a test suite I haven't gotten around to publish it as open source on GitHub and making the binaries available on NuGet.  
+Because of lack of time to invest in creating documentation and completing the test suite I haven't gotten around to publish it as open source on GitHub previously.  
 
 ## TODO
 
-- Add XML documention for all public classes and members 
-- Add simple "Getting started" guide.
+- Add basic "Getting started" guide.
 
 ## Run Tests
 

@@ -3,6 +3,10 @@ using DynamoDB.Net.Serialization;
 
 namespace DynamoDB.Net.Expressions;
 
+/// <summary>
+/// Represents the translation context used when converting 
+/// expression trees into DynamoDB expression strings.
+/// </summary>
 public class ExpressionTranslationContext
 {
     Dictionary<string, string>? attributeNames;
@@ -10,6 +14,10 @@ public class ExpressionTranslationContext
     Dictionary<string, AttributeValue>? attributeValues;
     Dictionary<AttributeValue, string>? attributeValueAliases;
 
+    /// <summary>
+    /// Initializes a new translation context using the specified <paramref name="serializer"/>.
+    /// </summary>
+    /// <param name="serializer">The <see cref="IDynamoDBSerializer"/> instance to serialize item attribute values.</param>
     public ExpressionTranslationContext(IDynamoDBSerializer serializer)
     {
         ArgumentNullException.ThrowIfNull(serializer);
@@ -17,25 +25,45 @@ public class ExpressionTranslationContext
         Serializer = serializer;
     }
 
-
+    /// <summary>
+    /// The serializer used to serialize item attribute values.
+    /// </summary>
     public IDynamoDBSerializer Serializer { get; }
 
+    /// <summary>
+    /// Mapping of placeholder names to DynamoDB attribute names used in the
+    /// translated expression.
+    /// </summary>
     public Dictionary<string, string>? AttributeNames => attributeNames;
-    
+
+    /// <summary>
+    /// Mapping of placeholder aliases to DynamoDB attribute values used in the
+    /// translated expression.
+    /// </summary>
     public Dictionary<string, AttributeValue>? AttributeValues => attributeValues;
 
-    internal Stack<DynamoDBExpressions.ArrayConstantKind> ArrayConstantKind { get; } = new([DynamoDBExpressions.ArrayConstantKind.Unspecified]); 
+    internal Stack<DynamoDBExpressions.ArrayConstantKind> ArrayConstantKind { get; } = new([DynamoDBExpressions.ArrayConstantKind.Unspecified]);
 
-    public string GetOrAddAttributeName(string name) => 
+    /// <summary>
+    /// Resolve the placeholder for a item attribute name, adding a new 
+    /// name to placeholder mapping to the context if it doesn't already exist.
+    /// </summary>
+    /// <param name="name">The name to resolve to a placeholder.</param>
+    public string GetOrAddAttributeName(string name) =>
         GetOrAddWithAlias(name, ref attributeNameAliases, ref attributeNames, StringComparer.InvariantCulture, "#p");
 
-    public string GetOrAddAttributeValue(AttributeValue value) => 
+    /// <summary>
+    /// Resolve the placeholder for a <see cref="AttributeValue" />, adding a new 
+    /// value to placeholder mapping to the context if it doesn't already exist.
+    /// </summary>
+    /// <param name="value">The value to resolve to a placeholder.</param>
+    public string GetOrAddAttributeValue(AttributeValue value) =>
         GetOrAddWithAlias(value, ref attributeValueAliases, ref attributeValues, AttributeValueComparer.Default, ":v");
 
     static string GetOrAddWithAlias<TValue>(
-        TValue value, 
-        ref Dictionary<TValue, string>? valueToAlias, 
-        ref Dictionary<string, TValue>? aliasToValue, 
+        TValue value,
+        ref Dictionary<TValue, string>? valueToAlias,
+        ref Dictionary<string, TValue>? aliasToValue,
         IEqualityComparer<TValue> valueComparer,
         string prefix) where TValue : class
     {
@@ -65,6 +93,10 @@ public class ExpressionTranslationContext
         }
     }
 
+    /// <summary>
+    /// Merges names and values from a <see cref="DynamoDBExpressions.RawExpression"/> into
+    /// this context, creating aliases for any placeholders as needed.
+    /// </summary>
     internal void Add(DynamoDBExpressions.RawExpression raw)
     {
         if (raw.names != null)

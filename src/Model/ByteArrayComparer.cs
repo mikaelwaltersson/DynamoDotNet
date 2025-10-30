@@ -2,16 +2,23 @@ using System.Collections;
 
 namespace DynamoDB.Net.Model;
 
+/// <summary>
+/// Equality comparer for <see cref="byte" /> array instances.
+/// </summary>
 public class ByteArrayComparer : IComparer<byte[]>, IComparer, IEqualityComparer<byte[]>
 {
+    /// <summary>
+    /// The default <see cref="ByteArrayComparer" /> instance.
+    /// </summary>
     public static readonly ByteArrayComparer Default = new();
 
+    /// <inheritdoc />
     public int Compare(byte[]? x, byte[]? y)
     {
         if (ReferenceEquals(x, y))
             return 0;
 
-        if (x == null) return -1;         
+        if (x == null) return -1;
         if (y == null) return 1;
 
         for (var i = 0; i < x.Length && i < y.Length; i++)
@@ -23,9 +30,11 @@ public class ByteArrayComparer : IComparer<byte[]>, IComparer, IEqualityComparer
         return x.Length.CompareTo(y.Length);
     }
 
+    /// <inheritdoc />
     public bool Equals(byte[]? x, byte[]? y) =>
         x?.Length == y?.Length && Compare(x, y) == 0;
 
+    /// <inheritdoc />
     public int GetHashCode(byte[] obj)
     {
         ArgumentNullException.ThrowIfNull(obj);

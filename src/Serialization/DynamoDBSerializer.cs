@@ -7,6 +7,9 @@ using Microsoft.Extensions.Options;
 
 namespace DynamoDB.Net.Serialization;
 
+/// <summary>
+/// Implementation for serializing into and deserialization from DynamoDB AttributeValue representations.
+/// </summary>
 public sealed class DynamoDBSerializer(IOptions<DynamoDBSerializerOptions> options) : IDynamoDBSerializer
 {
     readonly ConcurrentDictionary<Type, Dictionary<string, DynamoDBAttributeInfo>> cachedAttributeInfoLookups = [];
@@ -18,9 +21,13 @@ public sealed class DynamoDBSerializer(IOptions<DynamoDBSerializerOptions> optio
     readonly DynamoDBObjectTypeNameResolver objectTypeNameResolver = options.Value.ObjectTypeNameResolver;
     readonly IEnumerable<IOnDeserializeProperty> onDeserializeProperty = [.. options.Value.OnDeserializeProperty];
     readonly IEnumerable<IOnSerializeProperty> onSerializeProperty = [.. options.Value.OnSerializeProperty];
-    
+
+    /// <summary>
+    /// The default <see cref="DynamoDBSerializer" /> instance initialized with the default options. 
+    /// </summary>
     public static readonly DynamoDBSerializer Default = new(Options.Create(new DynamoDBSerializerOptions()));
 
+    /// <inheritdoc />
     public object? DeserializeDynamoDBValue(AttributeValue value, Type objectType) =>
         value switch
         {
@@ -41,21 +48,23 @@ public sealed class DynamoDBSerializer(IOptions<DynamoDBSerializerOptions> optio
             { BS.Count: > 0 } => typeConverter.ConvertFromBinarySet(value.BS, objectType),
 
             { IsLSet: true } => typeConverter.ConvertFromList(value.L, objectType, this),
-            
+
             { IsMSet: true } => typeConverter.ConvertFromMap(value.M, objectType, this),
-            
-            _=> throw new ArgumentOutOfRangeException(nameof(value))
+
+            _ => throw new ArgumentOutOfRangeException(nameof(value))
         };
 
+    /// <inheritdoc />
     public AttributeValue SerializeDynamoDBValue(object? value, Type objectType) =>
         typeConverter.ConvertToDynamoDBValue(value, objectType, this);
 
+    /// <inheritdoc />
     public DynamoDBAttributeInfo GetPropertyAttributeInfo((Type DeclaringType, string Name) property)
     {
-        var attributeInfoLookup = 
+        var attributeInfoLookup =
             cachedAttributeInfoLookups.GetOrAdd(
-                property.DeclaringType, 
-                type => 
+                property.DeclaringType,
+                type =>
                 {
                     if (!typeConverter.IsSerializedAsPlainObject(type))
                         throw new InvalidOperationException($"Can not access member '{property.Name}', type '{type.FullName}' is not serialized as a plain object");
@@ -70,10 +79,11 @@ public sealed class DynamoDBSerializer(IOptions<DynamoDBSerializerOptions> optio
 
         if (!attributeInfoLookup.TryGetValue(property.Name, out var attributeInfo))
             throw new DynamoDBSerializationException($"No serializable property '{property.Name}' on type '{property.DeclaringType.FullName}'");
-        
+
         return attributeInfo;
     }
 
+    /// <inheritdoc />
     public DynamoDBObjectTypeNameResolver ObjectTypeNameResolver => objectTypeNameResolver;
 
     DynamoDBAttributeInfo GetDynamoDBAttributeInfo(MemberInfo memberInfo)
@@ -82,27 +92,27 @@ public sealed class DynamoDBSerializer(IOptions<DynamoDBSerializerOptions> optio
 
         return new()
         {
-            AttributeName = 
-                propertyAttribute?.AttributeName ?? 
+            AttributeName =
+                propertyAttribute?.AttributeName ??
                 attributeNameTransform.TransformName(memberInfo.Name),
 
-            IsPrimaryKey = 
+            IsPrimaryKey =
                 memberInfo.HasCustomAttribute<IndexKeyAttribute>(attribute => attribute.IndexType == IndexType.PrimaryKey),
 
             SerializeDefaultValues =
                 propertyAttribute is { SerializeDefaultValuesIsSpecified: true, SerializeDefaultValues: var serializeDefaultValueOverride }
-                    ? serializeDefaultValueOverride 
+                    ? serializeDefaultValueOverride
                     : serializeDefaultValuesFor != null
                         ? serializeDefaultValuesFor(memberInfo.GetPropertyType())
                         : serializeDefaultValues,
 
             SerializeNullValues =
                 propertyAttribute is { SerializeNullValuesIsSpecified: true, SerializeNullValues: var serializeNullValuesOverride }
-                    ? serializeNullValuesOverride 
+                    ? serializeNullValuesOverride
                     : serializeNullValues,
 
-            NotSerialized = 
-                propertyAttribute?.NotSerialized ?? 
+            NotSerialized =
+                propertyAttribute?.NotSerialized ??
                 false,
 
             OnDeserializeProperty =
@@ -117,54 +127,54 @@ public sealed class DynamoDBSerializer(IOptions<DynamoDBSerializerOptions> optio
         };
     }
 
-    class ResolvedTypeConverter(IEnumerable<DynamoDBTypeConverter> converters) 
+    class ResolvedTypeConverter(IEnumerable<DynamoDBTypeConverter> converters)
         : IConvertFromString, IConvertFromNumber, IConvertFromBinary
     {
         readonly ConcurrentDictionary<(Type, Type), object> resolvedTypeConverters = [];
 
-        T ResolveTypeConverter<T>(Type type) where T : class => 
+        T ResolveTypeConverter<T>(Type type) where T : class =>
             (T)resolvedTypeConverters.GetOrAdd(
-                (type, typeof(T)), 
+                (type, typeof(T)),
                 ((Type Type, Type ConverterType) key) =>
                     converters
                         .Append(DynamoDBTypeConverter.Default)
-                        .First(converter => 
-                            key.ConverterType.IsInstanceOfType(converter) && 
+                        .First(converter =>
+                            key.ConverterType.IsInstanceOfType(converter) &&
                             converter.Handle(key.Type)));
-    
+
         public AttributeValue ConvertToDynamoDBValue(object? value, Type fromType, IDynamoDBSerializer serializer) =>
             ResolveTypeConverter<IConvertToDynamoDBValue>(fromType).ConvertToDynamoDBValue(value, fromType, serializer);
 
-        public object? ConvertFromNull(Type toType) => 
+        public object? ConvertFromNull(Type toType) =>
             ResolveTypeConverter<IConvertFromNull>(toType).ConvertFromNull(toType);
 
-        public object ConvertFromBoolean(bool value, Type toType) => 
+        public object ConvertFromBoolean(bool value, Type toType) =>
             ResolveTypeConverter<IConvertFromBoolean>(toType).ConvertFromBoolean(value, toType);
 
-        public object ConvertFromString(string value, Type toType) => 
+        public object ConvertFromString(string value, Type toType) =>
             ResolveTypeConverter<IConvertFromString>(toType).ConvertFromString(value, toType);
 
-        public object ConvertFromNumber(string value, Type toType) => 
+        public object ConvertFromNumber(string value, Type toType) =>
             ResolveTypeConverter<IConvertFromNumber>(toType).ConvertFromNumber(value, toType);
 
-        public object ConvertFromBinary(MemoryStream value, Type toType) => 
+        public object ConvertFromBinary(MemoryStream value, Type toType) =>
             ResolveTypeConverter<IConvertFromBinary>(toType).ConvertFromBinary(value, toType);
 
-        public object ConvertFromStringSet(ICollection<string> values, Type toType) => 
+        public object ConvertFromStringSet(ICollection<string> values, Type toType) =>
             ResolveTypeConverter<IConvertFromStringSet>(toType).ConvertFromStringSet(values, toType, this);
 
-        public object ConvertFromNumberSet(ICollection<string> values, Type toType) => 
+        public object ConvertFromNumberSet(ICollection<string> values, Type toType) =>
             ResolveTypeConverter<IConvertFromNumberSet>(toType).ConvertFromNumberSet(values, toType, this);
 
-        public object ConvertFromBinarySet(ICollection<MemoryStream> values, Type toType) => 
+        public object ConvertFromBinarySet(ICollection<MemoryStream> values, Type toType) =>
             ResolveTypeConverter<IConvertFromBinarySet>(toType).ConvertFromBinarySet(values, toType, this);
 
-        public object ConvertFromList(List<AttributeValue> elements, Type toType, IDynamoDBSerializer serializer) => 
+        public object ConvertFromList(List<AttributeValue> elements, Type toType, IDynamoDBSerializer serializer) =>
             ResolveTypeConverter<IConvertFromList>(toType).ConvertFromList(elements, toType, serializer);
 
         public object ConvertFromMap(Dictionary<string, AttributeValue> entries, Type toType, DynamoDBSerializer serializer) =>
             ResolveTypeConverter<IConvertFromMap>(toType).ConvertFromMap(entries, toType, serializer);
-    
+
         public bool IsSerializedAsPlainObject(Type type) =>
             ResolveTypeConverter<IConvertToDynamoDBValue>(type) == DynamoDBTypeConverter.Default &&
             DefaultDynamoDBTypeConverter.IsSerializedAsPlainObject(type);

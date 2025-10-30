@@ -371,7 +371,7 @@ class DefaultDynamoDBTypeConverter
             if (!entries.TryGetValue(partitionKeyInfo.AttributeName, out var partitionKeyValue))
                 throw MissingRequiredAttribute(typeof(PrimaryKey<T>), partitionKeyInfo.AttributeName);
 
-            var partitionKey = serializer.DeserializeDynamoDBValue(partitionKeyValue, TableDescription.PropertyTypes<T>.PartitionKey, pathElement: partitionKeyInfo.AttributeName);
+            var partitionKey = serializer.DeserializeDynamoDBValue(partitionKeyValue, TableDescription.PropertyTypes<T>.PartitionKey, pathElement: partitionKeyInfo.AttributeName)!;
             var sortKey = default(object?);
 
             if (TableDescription.Properties<T>.SortKey != null)

@@ -2,10 +2,14 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Amazon.DynamoDBv2.Model;
 
-namespace DynamoDB.Net;
+namespace DynamoDB.Net.Serialization;
 
+/// <summary>
+/// <see cref="JsonConverter" /> implementation for converting to and from <see cref="AttributeValue"/> values.
+/// </summary>
 public class AttributeValueJsonConverter : JsonConverter<AttributeValue>
 {
+    /// <inheritdoc />
     public override AttributeValue Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
     {
         Assert(reader.TokenType is JsonTokenType.StartObject);
@@ -13,7 +17,7 @@ public class AttributeValueJsonConverter : JsonConverter<AttributeValue>
 
         Assert(reader.Read() && reader.TokenType is JsonTokenType.PropertyName);
         var type = reader.GetString();
-        
+
         switch (type)
         {
             case "NULL":
@@ -31,7 +35,7 @@ public class AttributeValueJsonConverter : JsonConverter<AttributeValue>
                 value.S = reader.GetString()!;
                 Assert(value.S is not null);
                 break;
-        
+
             case "N":
                 Assert(reader.Read() && reader.TokenType is JsonTokenType.String);
                 value.N = reader.GetString()!;
@@ -115,6 +119,7 @@ public class AttributeValueJsonConverter : JsonConverter<AttributeValue>
         return value;
     }
 
+    /// <inheritdoc />
     public override void Write(Utf8JsonWriter writer, AttributeValue value, JsonSerializerOptions options)
     {
         if (value.NULL)
@@ -176,7 +181,7 @@ public class AttributeValueJsonConverter : JsonConverter<AttributeValue>
                 writer.WriteBase64StringValue(entry.ToArray());
             writer.WriteEndArray();
             writer.WriteEndObject();
-        }      
+        }
         else if (value.IsLSet)
         {
             writer.WriteStartObject();
@@ -200,7 +205,7 @@ public class AttributeValueJsonConverter : JsonConverter<AttributeValue>
             writer.WriteEndObject();
             writer.WriteEndObject();
         }
-        else 
+        else
             throw new JsonException();
     }
 

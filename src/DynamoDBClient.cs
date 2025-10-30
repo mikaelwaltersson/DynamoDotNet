@@ -10,6 +10,9 @@ using Microsoft.Extensions.Options;
 
 namespace DynamoDB.Net;
 
+/// <summary>
+/// Implements a client for performing operations against DynamoDB.
+/// </summary>
 public class DynamoDBClient : IDynamoDBClient
 {
     readonly IAmazonDynamoDB client;
@@ -18,11 +21,14 @@ public class DynamoDBClient : IDynamoDBClient
     readonly ILogger<DynamoDBClient> logger;
     readonly IDynamoDBSerializer serializer;
 
+    /// <summary>
+    /// Initializes a new client instance wrapping an existing low-level <see cref="IAmazonDynamoDB"/> instance.
+    /// </summary>
     public DynamoDBClient(
-        IAmazonDynamoDB client, 
+        IAmazonDynamoDB client,
         IOptions<DynamoDBClientOptions> options,
         IDynamoDBSerializer serializer,
-        IEnumerable<IDynamoDBItemEventHandler> itemEventHandlers, 
+        IEnumerable<IDynamoDBItemEventHandler> itemEventHandlers,
         ILogger<DynamoDBClient> logger)
     {
         ArgumentNullException.ThrowIfNull(client);
@@ -34,7 +40,7 @@ public class DynamoDBClient : IDynamoDBClient
         this.client = client;
         this.options = options;
         this.serializer = serializer;
-        this.itemEvents = new CombinedDynamoDBItemEventHandlers([..itemEventHandlers]);
+        this.itemEvents = new CombinedDynamoDBItemEventHandlers([.. itemEventHandlers]);
         this.logger = logger;
     }
 
@@ -46,25 +52,27 @@ public class DynamoDBClient : IDynamoDBClient
         logger.IsEnabled(LogLevel.Debug)
             ? ReturnConsumedCapacity.INDEXES
             : ReturnConsumedCapacity.NONE;
-    
 
+
+    /// <inheritdoc />
     public Task<T?> TryGetAsync<T>(
         PrimaryKey<T> key,
         bool? consistentRead = false,
         CancellationToken cancellationToken = default) where T : class =>
-        GetAsync(key, consistentRead, cancellationToken, throwErrorIfNotExists: false);
+        GetAsync(key, consistentRead, false, cancellationToken);
 
+    /// <inheritdoc />
     public Task<T> GetAsync<T>(
         PrimaryKey<T> key,
         bool? consistentRead = false,
         CancellationToken cancellationToken = default) where T : class =>
-        GetAsync(key, consistentRead, cancellationToken, throwErrorIfNotExists: true)!;
+        GetAsync(key, consistentRead, true, cancellationToken)!;
 
     async Task<T?> GetAsync<T>(
         PrimaryKey<T> key,
         bool? consistendRead,
-        CancellationToken cancellationToken,
-        bool throwErrorIfNotExists) where T : class
+        bool throwErrorIfNotExists,
+        CancellationToken cancellationToken) where T : class
     {
         ArgumentOutOfRangeException.ThrowIfEqual(key, default);
 
@@ -88,7 +96,7 @@ public class DynamoDBClient : IDynamoDBClient
         return null;
     }
 
-
+    /// <inheritdoc />
     public async Task<T> PutAsync<T>(
         T item,
         Expression<Func<T, bool>>? condition = null,
@@ -113,6 +121,7 @@ public class DynamoDBClient : IDynamoDBClient
         return DeserializeItem<T>(request.Item);
     }
 
+    /// <inheritdoc />
     public async Task<T> UpdateAsync<T>(
         PrimaryKey<T> key,
         Expression<Func<T, DynamoDBExpressions.UpdateAction>> update,
@@ -124,7 +133,7 @@ public class DynamoDBClient : IDynamoDBClient
 
         var request =
             new UpdateItemRequest
-            {                    
+            {
                 TableName = TableDescription.GetTableName<T>(Options),
                 Key = Serialize(key),
                 UpdateExpression = operation.UpdateExpression,
@@ -135,11 +144,12 @@ public class DynamoDBClient : IDynamoDBClient
                 ReturnValues = ReturnValue.ALL_NEW
             };
 
-            var response = await Invoke(client.UpdateItemAsync, request, cancellationToken);
+        var response = await Invoke(client.UpdateItemAsync, request, cancellationToken);
 
         return DeserializeItem<T>(response.Attributes);
     }
 
+    /// <inheritdoc />
     public Task DeleteAsync<T>(
         PrimaryKey<T> key,
         Expression<Func<T, bool>>? condition = null,
@@ -163,6 +173,7 @@ public class DynamoDBClient : IDynamoDBClient
         return Invoke(client.DeleteItemAsync, request, cancellationToken);
     }
 
+    /// <inheritdoc />
     public async Task<IDynamoDBPartialResult<T>> ScanAsync<T>(
         Expression<Func<T, bool>>? filter = null,
         PrimaryKey<T> exclusiveStartKey = default,
@@ -181,7 +192,7 @@ public class DynamoDBClient : IDynamoDBClient
                 IndexName = indexProperties.GetIndexName<T>(),
                 FilterExpression = filter?.Translate(expressionTranslationContext),
                 ExpressionAttributeNames = expressionTranslationContext.AttributeNames,
-                ExpressionAttributeValues = expressionTranslationContext.AttributeValues,   
+                ExpressionAttributeValues = expressionTranslationContext.AttributeValues,
                 ConsistentRead = consistendRead ?? DefaultConsistentRead,
                 ReturnConsumedCapacity = LogConsumedCapacity
             };
@@ -197,6 +208,7 @@ public class DynamoDBClient : IDynamoDBClient
         return new PartialResult<T>(items, lastEvaluatedKey);
     }
 
+    /// <inheritdoc />
     public async Task<IDynamoDBPartialResult<T>> QueryAsync<T>(
         Expression<Func<T, bool>> keyCondition,
         Expression<Func<T, bool>>? filter = null,
@@ -217,12 +229,12 @@ public class DynamoDBClient : IDynamoDBClient
                 TableName = TableDescription.GetTableName<T>(Options),
                 ExclusiveStartKey = Serialize(exclusiveStartKey),
                 KeyConditionExpression = keyCondition.Translate(expressionTranslationContext),
-                IndexName = indexProperties != default 
-                    ? indexProperties.GetIndexName<T>() 
+                IndexName = indexProperties != default
+                    ? indexProperties.GetIndexName<T>()
                     : keyCondition.GetIndexName(),
                 FilterExpression = filter?.Translate(expressionTranslationContext),
                 ExpressionAttributeNames = expressionTranslationContext.AttributeNames,
-                ExpressionAttributeValues = expressionTranslationContext.AttributeValues,  
+                ExpressionAttributeValues = expressionTranslationContext.AttributeValues,
                 ConsistentRead = consistentRead ?? DefaultConsistentRead,
                 ReturnConsumedCapacity = LogConsumedCapacity
             };
@@ -241,6 +253,7 @@ public class DynamoDBClient : IDynamoDBClient
         return new PartialResult<T>(items, lastEvaluatedKey);
     }
 
+    /// <inheritdoc />
     public IDynamoDBWriteTransaction BeginWriteTransaction() => new WriteTransaction(this);
 
     Put CreatePutOperation<T>(
@@ -250,7 +263,7 @@ public class DynamoDBClient : IDynamoDBClient
         ArgumentNullException.ThrowIfNull(item);
 
         var expressionTranslationContext = new ExpressionTranslationContext(serializer);
-        
+
         var version = TableDescription.PropertyAccessors<T>.GetVersion?.Invoke(item);
 
         var serializedItem = itemEvents.OnItemSerialized<T>(Serialize(item), expressionTranslationContext);
@@ -282,7 +295,7 @@ public class DynamoDBClient : IDynamoDBClient
         var translatedItemUpdate = itemEvents.OnItemUpdateTranslated<T>(update.Translate(expressionTranslationContext), version, expressionTranslationContext);
         var translatedItemCondition = itemEvents.OnItemConditionTranslated<T>(condition?.Translate(expressionTranslationContext), version, expressionTranslationContext);
 
-        return 
+        return
             new Update
             {
                 TableName = TableDescription.GetTableName<T>(Options),
@@ -317,8 +330,8 @@ public class DynamoDBClient : IDynamoDBClient
     }
 
     ConditionCheck CreateConditionCheckOperation<T>(
-        PrimaryKey<T> key, 
-        Expression<Func<T, bool>> condition, 
+        PrimaryKey<T> key,
+        Expression<Func<T, bool>> condition,
         object? version = null) where T : class
     {
         ArgumentOutOfRangeException.ThrowIfEqual(key, default);
@@ -327,7 +340,7 @@ public class DynamoDBClient : IDynamoDBClient
 
         var translatedItemCondition = itemEvents.OnItemConditionTranslated<T>(condition?.Translate(expressionTranslationContext), version, expressionTranslationContext);
 
-        return 
+        return
             new ConditionCheck
             {
                 TableName = TableDescription.GetTableName<T>(Options),
@@ -338,7 +351,7 @@ public class DynamoDBClient : IDynamoDBClient
             };
     }
 
-    Dictionary<string, AttributeValue> Serialize<T>(T itemOrKeys) => 
+    Dictionary<string, AttributeValue> Serialize<T>(T itemOrKeys) =>
         serializer.SerializeDynamoDBValue(itemOrKeys).EnsureIsMSet().M;
 
     T Deserialize<T>(Dictionary<string, AttributeValue> attributes) =>
@@ -351,8 +364,8 @@ public class DynamoDBClient : IDynamoDBClient
         attributes.Count == 0 ? default : Deserialize<PrimaryKey<T>>(attributes);
 
     async Task<TResponse> Invoke<TRequest, TResponse>(
-        Func<TRequest, CancellationToken, Task<TResponse>> operation, 
-        TRequest request, 
+        Func<TRequest, CancellationToken, Task<TResponse>> operation,
+        TRequest request,
         CancellationToken cancellationToken)
         where TRequest : AmazonDynamoDBRequest
         where TResponse : AmazonWebServiceResponse
@@ -368,20 +381,20 @@ public class DynamoDBClient : IDynamoDBClient
         }
         catch (ConditionalCheckFailedException ex)
         {
-            logger.ConditionalCheckFailed(ex);    
+            logger.ConditionalCheckFailed(ex);
             throw;
         }
         catch (TransactionCanceledException ex)
         {
-            logger.TransactionCanceled(ex);    
+            logger.TransactionCanceled(ex);
             throw;
         }
         catch (AmazonDynamoDBException ex)
         {
-            logger.InvokeFailed(ex, ex.ErrorCode);    
+            logger.InvokeFailed(ex, ex.ErrorCode);
             throw;
         }
-    } 
+    }
 
     class PartialResult<T>(T[] items, PrimaryKey<T> lastEvaluatedKey) : IDynamoDBPartialResult<T> where T : class
     {
@@ -424,9 +437,9 @@ public class DynamoDBClient : IDynamoDBClient
             this.isCommitted = true;
 
             var client = this.dynamoDBClient.client;
-            var request = 
-                new TransactWriteItemsRequest 
-                { 
+            var request =
+                new TransactWriteItemsRequest
+                {
                     TransactItems = this.transactItems
                 };
 
@@ -450,7 +463,7 @@ public class DynamoDBClient : IDynamoDBClient
 
     class CombinedDynamoDBItemEventHandlers(IEnumerable<IDynamoDBItemEventHandler> itemEventHandlers) : IDynamoDBItemEventHandler
     {
-        T IDynamoDBItemEventHandler.OnItemDeserialized<T>(T item) => 
+        T IDynamoDBItemEventHandler.OnItemDeserialized<T>(T item) =>
             itemEventHandlers.Aggregate(item, (value, handler) => handler.OnItemDeserialized(value));
 
         Dictionary<string, AttributeValue> IDynamoDBItemEventHandler.OnItemSerialized<T>(Dictionary<string, AttributeValue> item, ExpressionTranslationContext translationContext) =>

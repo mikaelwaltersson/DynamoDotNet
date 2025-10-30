@@ -29,7 +29,7 @@ public class PrimaryKeyTests
     [Fact]
     public void CreatePrimaryKeyFromTupleFailsIfKeyPartIsNull()
     {
-        Assert.Throws<ArgumentOutOfRangeException>(() => PrimaryKey<Item>.FromTuple((null, 123)));
+        Assert.Throws<ArgumentOutOfRangeException>(() => PrimaryKey<Item>.FromTuple((null!, 123)));
         Assert.Throws<ArgumentOutOfRangeException>(() => PrimaryKey<Item>.FromTuple(("XYZ", null)));
     }
 

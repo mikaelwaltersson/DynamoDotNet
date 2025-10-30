@@ -2,10 +2,17 @@ using Amazon.DynamoDBv2.Model;
 
 namespace DynamoDB.Net.Serialization;
 
+/// <summary>
+/// Equality comparer for <see cref="AttributeValue" /> instances.
+/// </summary>
 public class AttributeValueComparer : IEqualityComparer<AttributeValue>
 {
+    /// <summary>
+    /// The default <see cref="AttributeValueComparer" /> instance.
+    /// </summary>
     public static AttributeValueComparer Default { get; } = new AttributeValueComparer();
-    
+
+    /// <inheritdoc />
     public bool Equals(AttributeValue? x, AttributeValue? y) =>
         x switch
         {
@@ -29,19 +36,20 @@ public class AttributeValueComparer : IEqualityComparer<AttributeValue>
 
             { IsLSet: true } => y is { IsLSet: true } && x.L.SequenceEqual(y.L, this),
 
-            { IsMSet: true } => 
-                y is { IsMSet: true } && 
-                x.M.Count == y.M.Count && 
+            { IsMSet: true } =>
+                y is { IsMSet: true } &&
+                x.M.Count == y.M.Count &&
                 x.M.All(xEntry => y.M.TryGetValue(xEntry.Key, out var yValue) && Equals(xEntry.Value, yValue)),
 
             _ => y != null && y.IsEmpty()
         };
 
+    /// <inheritdoc />
     public int GetHashCode(AttributeValue obj)
     {
         ArgumentNullException.ThrowIfNull(obj);
 
-        return obj switch 
+        return obj switch
         {
             { NULL: true } => 0,
 
