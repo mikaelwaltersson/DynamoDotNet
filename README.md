@@ -1,7 +1,8 @@
-# DynamoDotnetNet
+# DynamoDB.NET
 
 Easy to use and performant DynamoDB libary for .NET Core  
 
+Nuget: https://www.nuget.org/packages/DynamoDB.Net
 
 ## 1.0.0
 
