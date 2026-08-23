@@ -58,6 +58,9 @@ public readonly struct PrimaryKey<T> : IPrimaryKey, IEquatable<PrimaryKey<T>> wh
     /// <inheritdoc />
     public object? SortKey { get; }
 
+    /// <inheritdoc />
+    public IReadOnlyList<KeyValuePair<string, object>>? AdditionalKeyValuePairs { get; }
+    
     /// <summary>
     /// Creates a PrimaryKey&lt;T&gt; from a tuple of (partitionKey, sortKey), validating types
     /// and converting values to the configured key types for <typeparamref name="T"/>.
@@ -79,6 +82,22 @@ public readonly struct PrimaryKey<T> : IPrimaryKey, IEquatable<PrimaryKey<T>> wh
 
         return new(partitionKey, sortKey);
     }
+
+    /// <summary>
+    /// Creates a new PrimaryKey&lt;T&gt; with additional key/value pairs included.
+    /// </summary>
+    /// <param name="additionalKeyValuePairs">The additional key/value pairs.</param>
+    /// <returns>A PrimaryKey&lt;T&gt; representing the provided key values with additional key/value pairs included.</returns>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when tuple shape doesn't match the table's key configuration.</exception>
+    public PrimaryKey<T> WithAdditionalKeyValuePairs(IEnumerable<KeyValuePair<string, object>> additionalKeyValuePairs) =>
+        new(this, [.. 
+            additionalKeyValuePairs
+                .Select(pair => 
+                TableDescription.PropertyTypes<T>.AdditionalIndexKeys.ContainsKey(pair.Key) 
+                    ? pair
+                    : throw new ArgumentOutOfRangeException(nameof(additionalKeyValuePairs), $"Invalid secondary index key name: '{pair.Key}'")
+                )
+        ]);
 
     /// <summary>
     /// Creates a PrimaryKey&lt;T&gt; for the provided <paramref name="item"/> by using
@@ -164,6 +183,20 @@ public readonly struct PrimaryKey<T> : IPrimaryKey, IEquatable<PrimaryKey<T>> wh
                     keysSeparator));
         }
 
+        if (this.AdditionalKeyValuePairs != null)
+        {
+            foreach (var pair in this.AdditionalKeyValuePairs)
+            {
+                s.Append(keysSeparator);
+                s.Append(EscapeKeyValue(pair.Key, keysSeparator));
+                s.Append(keysSeparator);
+                s.Append(
+                    EscapeKeyValue(
+                        serializer.SerializeDynamoDBValue(pair.Value, TableDescription.PropertyTypes<T>.AdditionalIndexKeys[pair.Key]),
+                        keysSeparator));
+            }
+        }
+
         return s.ToString();
     }
 
@@ -177,25 +210,44 @@ public readonly struct PrimaryKey<T> : IPrimaryKey, IEquatable<PrimaryKey<T>> wh
     public static PrimaryKey<T> Parse(string s, IDynamoDBSerializer? serializer = null, char keysSeparator = PrimaryKey.DefaultKeysSeparator)
     {
         var key = s.Split(keysSeparator);
-        if (key.Length != (TableDescription.PropertyTypes<T>.SortKey != null ? 2 : 1))
+        var keyLength = (TableDescription.PropertyTypes<T>.SortKey != null ? 2 : 1);
+        
+        if (key.Length % 2 != keyLength % 2)
             throw new FormatException(nameof(s));
 
         serializer ??= DynamoDBSerializer.Default;
 
-        return
+        var primaryKey =
             new PrimaryKey<T>(
                 DeserializeKeyValue(serializer, UnescapeKeyValue(key[0]), TableDescription.PropertyTypes<T>.PartitionKey),
                 TableDescription.PropertyTypes<T>.SortKey != null
                     ? DeserializeKeyValue(serializer, UnescapeKeyValue(key[1]), TableDescription.PropertyTypes<T>.SortKey)
                     : null);
 
+        if (key.Length > keyLength)
+        {
+            primaryKey = primaryKey.WithAdditionalKeyValuePairs(
+                from pair in key.Skip(keyLength).Chunk(2)
+                let name = UnescapeKeyValue(pair.ElementAt(0)) 
+                let value = DeserializeKeyValue(serializer, UnescapeKeyValue(pair.ElementAt(1)), TableDescription.PropertyTypes<T>.AdditionalIndexKeys[name])
+                select new KeyValuePair<string, object>(name, value)
+            );
+        }
 
+        return primaryKey;
     }
 
     PrimaryKey(object partitionKey, object? sortKey)
     {
         PartitionKey = partitionKey;
         SortKey = sortKey;
+    }
+
+    PrimaryKey(PrimaryKey<T> primaryKey, KeyValuePair<string, object>[] additionalKeyValuePairs)
+    {
+        PartitionKey = primaryKey.PartitionKey;
+        SortKey = primaryKey.SortKey;
+        AdditionalKeyValuePairs = additionalKeyValuePairs;
     }
 
     static object DeserializeKeyValue(IDynamoDBSerializer serializer, string value, Type type) =>

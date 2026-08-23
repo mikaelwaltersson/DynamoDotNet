@@ -290,6 +290,17 @@ public class TableDescription
         public static readonly (Type DeclaringType, string Name)? SortKey = Get(typeof(T)).SortKeyProperty?.AsSimplePropertyReference();
 
         public static readonly (Type DeclaringType, string Name)? Version = Get(typeof(T)).VersionProperty?.AsSimplePropertyReference();
+
+        public static readonly IEnumerable<(Type DeclaringType, string Name)> AdditionalIndexKeys = [..
+            Get(typeof(T)).LocalSecondaryIndexSortKeyProperties
+                .Concat(Get(typeof(T)).GlobalSecondaryIndexPartitionKeyProperties)
+                .Concat(Get(typeof(T)).GlobalSecondaryIndexSortKeyProperties)
+                .Where(property => property != null && property.Name != PartitionKey.Name && property.Name != SortKey?.Name)
+                .Cast<MemberInfo>()
+                .DistinctBy(property => property.Name)
+                .OrderBy(property => property.Name)
+                .Select(property => property.AsSimplePropertyReference())
+        ];
     }
 
     internal static class PropertyTypes<T>
@@ -299,6 +310,13 @@ public class TableDescription
         public static readonly Type? SortKey = Get(typeof(T)).SortKeyProperty?.GetPropertyType();
 
         public static readonly Type? Version = Get(typeof(T)).VersionProperty?.GetPropertyType();
+
+        public static readonly IReadOnlyDictionary<string, Type> AdditionalIndexKeys = 
+            new Dictionary<string, Type>(
+                from property in Properties<T>.AdditionalIndexKeys
+                join member in typeof(T).GetSerializablePropertiesAndFields() on property.Name equals member.Name
+                select new KeyValuePair<string, Type>(property.Name, member.GetPropertyType()))
+                .AsReadOnly();
     }
 
     internal static class PropertyAccessors<T>

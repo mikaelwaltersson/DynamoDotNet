@@ -68,6 +68,20 @@ public class PrimaryKeyTests
     }
 
     [Fact]
+    public void CanFormatKeyWithSecondaryIndexValues()
+    {
+        Assert.Equal(
+            "XYZ|123|Gsi1P|ABC|Gsi1S|987", 
+            PrimaryKey<ItemWithSecondaryIndex>
+                .FromTuple(("XYZ", 123))
+                .WithAdditionalKeyValuePairs([
+                    new(nameof(ItemWithSecondaryIndex.Gsi1P), "ABC"),
+                    new(nameof(ItemWithSecondaryIndex.Gsi1S), 987)
+                ])
+                .ToString(keysSeparator: '|'));
+    }
+
+    [Fact]
     public void CanParseKeyValues()
     {
         Assert.Equal(PrimaryKey<Item>.FromTuple(("XYZ", 123)), PrimaryKey<Item>.Parse("XYZ|123", keysSeparator: '|'));
@@ -85,6 +99,20 @@ public class PrimaryKeyTests
         Assert.Equal(PrimaryKey<ItemWithByteArrayKey>.FromTuple((new byte[] { 1, 2, 3 }, null)), PrimaryKey<ItemWithByteArrayKey>.Parse("AQID"));
     }
 
+    [Fact]
+    public void CanParseKeyWithSecondaryIndexValues()
+    {
+        Assert.True( 
+            PrimaryKey<ItemWithSecondaryIndex>.Parse("XYZ|123|Gsi1P|ABC|Gsi1S|987", keysSeparator: '|') is { 
+                PartitionKey: "XYZ",
+                SortKey: 123,
+                AdditionalKeyValuePairs:
+                [
+                    { Key: nameof(ItemWithSecondaryIndex.Gsi1P), Value: "ABC" },
+                    { Key: nameof(ItemWithSecondaryIndex.Gsi1S), Value: 987 },
+                ]
+            });
+    }
 
     [Table]
     class Item
@@ -94,6 +122,22 @@ public class PrimaryKeyTests
 
         [SortKey]
         public int S { get; set; }
+    }
+
+    [Table]
+    class ItemWithSecondaryIndex
+    {
+        [PartitionKey]
+        public required string P { get; set; }
+
+        [SortKey]
+        public required int S { get; set; }
+
+        [PartitionKey(GlobalSecondaryIndex = 1)]
+        public required string Gsi1P { get; set; }
+
+        [SortKey(GlobalSecondaryIndex = 1)]
+        public required int Gsi1S { get; set; }
     }
 
     [Table]

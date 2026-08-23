@@ -219,6 +219,29 @@ public class DynamoDBSerializerTests
     }
 
     [Fact]
+    public void CanDeserializeAsPrimaryKeyWithAdditionalKeyValuesFromM()
+    {
+        Assert.True(
+            Serializer.DeserializeDynamoDBValue<PrimaryKey<PlainObjectWithSecondaryIndex>>(new() 
+            { 
+                M = new() 
+                { 
+                    ["Number"] = new() { N = "1" }, ["Text"] = new() { S = "One" },
+                    ["Number2"] = new() { N = "2" }, ["Text2"] = new() { S = "Two" }
+                 } 
+            }) is
+            {
+                PartitionKey: 1,
+                SortKey: "One",
+                AdditionalKeyValuePairs:
+                [
+                    { Key: nameof(PlainObjectWithSecondaryIndex.Number2), Value: 2 },
+                    { Key: nameof(PlainObjectWithSecondaryIndex.Text2), Value: "Two" }
+                ]
+            });
+    }
+
+    [Fact]
     public void CanDeserializeAsDictionaryFromM()
     {
         Assert.Equal(
@@ -447,6 +470,24 @@ public class DynamoDBSerializerTests
     }
 
     [Fact]
+    public void CanSerializePrimaryKeyWithAdditionalKeyValuesToM()
+    {
+        Assert.True(
+            Serializer.SerializeDynamoDBValue(
+                PrimaryKey
+                    .ForItem(new PlainObjectWithSecondaryIndex { Number = 1, Text = "One" })
+                    .WithAdditionalKeyValuePairs([
+                        new(nameof(PlainObjectWithSecondaryIndex.Number2), 2),
+                        new(nameof(PlainObjectWithSecondaryIndex.Text2), "Two")
+                    ])
+            ) is { IsMSet: true, M: { Count: 4 } attributes } &&
+            attributes.GetValueOrDefault("Number") is { N: "1" } && 
+            attributes.GetValueOrDefault("Text") is { S: "One" } &&
+            attributes.GetValueOrDefault("Number2") is { N: "2" } && 
+            attributes.GetValueOrDefault("Text2") is { S: "Two" });
+    }
+
+    [Fact]
     public void CanSerializeDictionaryToM()
     {
         Assert.True(
@@ -668,6 +709,22 @@ public class DynamoDBSerializerTests
 
         [SortKey]
         public string? Text { get; set; }
+    }
+
+    [Table]
+    record PlainObjectWithSecondaryIndex
+    {
+        [PartitionKey]
+        public int Number { get; set; }
+
+        [SortKey]
+        public string? Text { get; set; }
+
+        [PartitionKey(GlobalSecondaryIndex = 1)]
+        public int Number2 { get; set; }
+
+        [SortKey(GlobalSecondaryIndex = 1)]
+        public string? Text2 { get; set; }
     }
 
     [Table]

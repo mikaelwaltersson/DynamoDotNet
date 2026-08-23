@@ -280,6 +280,21 @@ class DefaultDynamoDBTypeConverter
 
                     serializedKeyValue.M[sortKeyInfo.AttributeName] = serializer.SerializeDynamoDBValue(keyValue.SortKey, TableDescription.PropertyTypes<T>.SortKey!);
                 }
+
+                if (keyValue.AdditionalKeyValuePairs is {} additionalKeyValuePairs)
+                {
+                    var additionalProperties = 
+                        from pair in additionalKeyValuePairs
+                        join property in TableDescription.Properties<T>.AdditionalIndexKeys on pair.Key equals property.Name
+                        let propertyInfo = serializer.GetPropertyAttributeInfo(property)
+                        let type = TableDescription.PropertyTypes<T>.AdditionalIndexKeys[property.Name]
+                        select (propertyInfo.AttributeName, Type: type, pair.Value);
+
+                    foreach (var property in additionalProperties.Distinct())
+                    {
+                        serializedKeyValue.M[property.AttributeName] = serializer.SerializeDynamoDBValue(property.Value, property.Type);
+                    }
+                }
             }
 
             return serializedKeyValue;
@@ -368,22 +383,44 @@ class DefaultDynamoDBTypeConverter
         public override object FromDynamoDBMap(Dictionary<string, AttributeValue> entries, IDynamoDBSerializer serializer)
         {
             var partitionKeyInfo = serializer.GetPropertyAttributeInfo(TableDescription.Properties<T>.PartitionKey);
+            var sortKeyInfo = default(DynamoDBAttributeInfo?);
+
             if (!entries.TryGetValue(partitionKeyInfo.AttributeName, out var partitionKeyValue))
                 throw MissingRequiredAttribute(typeof(PrimaryKey<T>), partitionKeyInfo.AttributeName);
 
             var partitionKey = serializer.DeserializeDynamoDBValue(partitionKeyValue, TableDescription.PropertyTypes<T>.PartitionKey, pathElement: partitionKeyInfo.AttributeName)!;
             var sortKey = default(object?);
+            var keyCount = 1;
 
             if (TableDescription.Properties<T>.SortKey != null)
             {
-                var sortKeyInfo = serializer.GetPropertyAttributeInfo(TableDescription.Properties<T>.SortKey.Value);
+                sortKeyInfo = serializer.GetPropertyAttributeInfo(TableDescription.Properties<T>.SortKey.Value);
+                
                 if (!entries.TryGetValue(sortKeyInfo.AttributeName, out var sortKeyInfoValue))
                     throw MissingRequiredAttribute(typeof(PrimaryKey<T>), sortKeyInfo.AttributeName);
 
-                sortKey = serializer.DeserializeDynamoDBValue(sortKeyInfoValue, TableDescription.PropertyTypes<T>.SortKey!, pathElement: partitionKeyInfo.AttributeName);   
+                sortKey = serializer.DeserializeDynamoDBValue(sortKeyInfoValue, TableDescription.PropertyTypes<T>.SortKey!, pathElement: sortKeyInfo.AttributeName);   
+                keyCount = 2;
             }
 
-            return PrimaryKey<T>.FromTuple((partitionKey, sortKey));  
+            var primaryKey = PrimaryKey<T>.FromTuple((partitionKey, sortKey));
+
+            if (entries.Count > keyCount)
+            {
+               var additionalKeyValuePairs = 
+                    from property in TableDescription.Properties<T>.AdditionalIndexKeys
+                    let propertyInfo = serializer.GetPropertyAttributeInfo(property)
+                    where entries.ContainsKey(propertyInfo.AttributeName)
+                    let deserializedValue = serializer.DeserializeDynamoDBValue(
+                        value: entries[propertyInfo.AttributeName], 
+                        type: TableDescription.PropertyTypes<T>.AdditionalIndexKeys[property.Name], 
+                        pathElement: propertyInfo.AttributeName)
+                    select new KeyValuePair<string, object?>(property.Name, deserializedValue);
+
+                primaryKey = primaryKey.WithAdditionalKeyValuePairs(additionalKeyValuePairs);
+            }
+
+            return primaryKey;  
         }
     }
 
